@@ -1,0 +1,13 @@
+{
+  "name": "@overlaybot/server",
+  "scripts": {
+    "dev": "npx tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@overlaybot/shared": "^1.0.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
+  }
+}

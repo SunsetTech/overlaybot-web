@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+	"rootDir": "./src",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "outDir": "./dist"
+  },
+  "references": [
+    { "path": "../shared" }
+  ],
+  "include": ["src"]
+}

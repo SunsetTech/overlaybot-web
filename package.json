@@ -1,0 +1,7 @@
+{
+  "name": "overlaybot-web",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
