@@ -3,5 +3,17 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+	plugins: [react()],
+	server: {
+		allowedHosts: ["overlaybot-web-client.tungstenbattlearmor.duckdns.org"],
+		proxy: {
+			"/auth": "http://localhost:3131",
+			"/viewer": {
+				target: "ws://localhost:3131",
+				ws: true
+			},
+			"/logout": "http://localhost:3131",
+			"/logout_everywhere": "http://localhost:3131"
+		}
+	}
 })
