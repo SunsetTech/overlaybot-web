@@ -80,7 +80,18 @@ App.get("/logout_everywhere", async (Request, Response) => {
 App.get("/auth", async (Request, Response) => {
 	console.log("auth endpoint hit")
 	const Location = new URL(Request.url!, "http://localhost")
+	const Cookies = parseCookie(Request.headers.cookie ?? "")
 	
+	const StoredState = Cookies.OAuthState
+	const PassedState = Location.searchParams.get("state")
+	
+	if (!StoredState || !PassedState || PassedState != StoredState) {
+		Response.writeHead(403)
+		Response.end("Possible CSRF detected")
+		return
+	}
+	
+
 	const AuthorizationCode = Location.searchParams.get("code")
 	if (!AuthorizationCode) {
 		Response.writeHead(400)
@@ -124,7 +135,7 @@ App.get("/auth", async (Request, Response) => {
 	console.log("User logged in", UserID)
 	
 	Response.writeHead(302, {
-		location: "/app",
+		location: `/app`,
 		"Set-Cookie": `session=${SessionToken}; HttpOnly; Path=/; Max-Age=604800`
 	})
 	Response.end()

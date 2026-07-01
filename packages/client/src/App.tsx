@@ -8,7 +8,7 @@ function App() {
 	const Connection = UseViewerSocket()
 	const [Controls, SetControls] = useState<OverlayBot.Controls | null>(null)
 	const Navigate = useNavigate()
-
+	
 	useEffect(() => {
 		if (!Connection) {return}
 		const HandleMessage = (Event: MessageEvent) => {
