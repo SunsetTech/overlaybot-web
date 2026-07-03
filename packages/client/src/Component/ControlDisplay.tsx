@@ -1,24 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect} from "react";
 import type { RefObject } from "react";
 import { UseViewerSocket } from "../AppContext";
 import type { OverlayBot } from "@overlaybot/shared";
 import { ParameterDisplay } from "./ParameterDisplay";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 type ControlDisplayProps = {
 	name: string
 	control: OverlayBot.Control
 	requestCounter: RefObject<number>
+	cost: number
 }
 
-export function ControlDisplay({name, control, requestCounter}: ControlDisplayProps) {
+export function ControlDisplay({name, control, requestCounter, cost}: ControlDisplayProps) {
 	const Connection = UseViewerSocket()
-	const [Values, SetValues] = useState<Record<string, string | number>>(control.Defaults)
-	
-	
+	const [Values, setValues] = useState<Record<string, string | number>>(control.Defaults)
+	useEffect(() => {
+		if (!Connection || Connection.readyState !== WebSocket.OPEN) { return }
+		const CostRequest = {
+			Type: "Cost",
+			Command: name,
+			Parameters: Values
+		}
+		Connection.send(JSON.stringify(CostRequest))
+	}, [Connection])
 	const HandleChange = (ParameterName: string, Value: string | number) => {
-		SetValues(Previous => ({ ...Previous, [ParameterName]: Value}))
+		const NewValues = { ...Values, [ParameterName]: Value }
+		setValues(NewValues)
+		if (Connection?.readyState === WebSocket.OPEN) {
+			const CostRequest = {
+				Type: "Cost",
+				Command: name,
+				Parameters: NewValues
+			}
+			Connection.send(JSON.stringify(CostRequest))
+		}
 	}
 	
 	const HandleActivate = () => {
@@ -33,11 +50,11 @@ export function ControlDisplay({name, control, requestCounter}: ControlDisplayPr
 		}
 	}
 	
-	
 	return (<Card className="min-w-[300px] [--card-spacing:--spacing(5)]">
 		<CardHeader style={{textAlign:"center"}}>
 			<CardTitle>{name}</CardTitle>
 		</CardHeader>
+		<CardDescription className="text-center">Cost: {cost} SP</CardDescription>
 		<CardContent>
 			{Object.entries(control.Parameters).map(([ParameterName, ParameterType]) => {
 				return (<ParameterDisplay 
