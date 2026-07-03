@@ -204,7 +204,7 @@ async function HandleBotConnection(Client: WebSocket) {
 			CurrentControls = Response.Controls
 			ViewerClients.forEach((Connection) => {
 				const ControlsResponse = {
-					Type: "Controls",
+					Type: "Introspection",
 					Controls: CurrentControls
 				}
 				Connection.Socket.send(JSON.stringify(ControlsResponse))
