@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { UseViewerSocket } from "../AppContext";
 import type { OverlayBot } from "@overlaybot/shared";
 import { ParameterDisplay } from "./ParameterDisplay";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 type ControlDisplayProps = {
@@ -34,7 +34,7 @@ export function ControlDisplay({name, control, requestCounter}: ControlDisplayPr
 	}
 	
 	
-	return (<Card className="min-w-[300px]">
+	return (<Card className="min-w-[300px] [--card-spacing:--spacing(5)]">
 		<CardHeader style={{textAlign:"center"}}>
 			<CardTitle>{name}</CardTitle>
 		</CardHeader>
@@ -49,7 +49,9 @@ export function ControlDisplay({name, control, requestCounter}: ControlDisplayPr
 					onChange={(Value: string | number) => HandleChange(ParameterName, Value)}
 				/>)
 			})}
-			<div style={{textAlign:"right"}}><Button onClick={HandleActivate}>Activate</Button></div>
 		</CardContent>
+		<CardFooter className="flex-col gap-2">
+			<Button onClick={HandleActivate} className="w-full">Activate</Button>
+		</CardFooter>
 	</Card>)
 }

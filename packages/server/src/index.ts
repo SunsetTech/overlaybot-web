@@ -199,7 +199,7 @@ async function HandleBotConnection(Client: WebSocket) {
 				}
 				Connection.Socket.send(JSON.stringify(ControlsMessage))
 			})
-		} else if (Message.Type == "Rejected" || Message.Type == "Activated") {
+		} else if (Message.Type == "Rejected" || Message.Type == "Activated" || Message.Type == "Balance") {
 			const TargetConnection = ViewerClientsByID.get(Message.ConnectionID)!
 			TargetConnection.Socket.send(Data.toString())
 		}
@@ -259,7 +259,7 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 		Client.on("message", (Data) => {
 			console.log("Received from viewer:", Data.toString())
 			const Message = JSON.parse(Data.toString())
-			if (Message.Type == "Activate") {
+			if (Message.Type == "Activate" || Message.Type == "Balance") {
 				const Viewer = ViewerClients.get(Client)!
 				Message.TwitchID = Viewer.TwitchID
 				Message.ConnectionID = Viewer.ConnectionID
