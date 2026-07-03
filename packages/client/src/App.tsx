@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { UseViewerSocket } from "./AppContext"
-import type { OverlayBot } from "@overlaybot/shared"
 import { ControlsDisplay } from "./Component/ControlsDisplay"
 import { toast, Toaster } from "react-hot-toast"
 import { Button } from "./components/ui/button"
+import type { Controls } from "@overlaybot/shared"
+import { ServerResponseSchema } from "@overlaybot/shared"
 
 function App() {
 	const Connection = UseViewerSocket()
-	const [Controls, setControls] = useState<OverlayBot.Controls | null>(null)
+	const [Controls, setControls] = useState<Controls | null>(null)
 	const [Balance, setBalance] = useState<number>(0)
 	const [Costs, setCosts] = useState<Record<string, number>>({})
 	const Navigate = useNavigate()
@@ -17,28 +18,34 @@ function App() {
 		if (!Connection) {return}
 		const HandleMessage = (Event: MessageEvent) => {
 			const Message = JSON.parse(Event.data)
-			if (Message.Type == "Controls") {
+			const Result = ServerResponseSchema.safeParse(Message)
+			if (!Result.success) {
+				console.log(Result.error.issues)
+				return
+			}
+			const Response = Result.data
+			if (Response.Type === "Introspection") {
 				console.log("updating controls")
-				setControls(Message.Controls)
+				setControls(Response.Controls)
 				const BalanceRequest = {
 					Type: "Balance"
 				}
 				Connection.send(JSON.stringify(BalanceRequest))
-			} else if (Message.Type == "BotDisconnected") {
+			} else if (Response.Type === "BotDisconnected") {
 				console.log("bot disconnected")
 				setControls(null)
-			} else if (Message.Type == "BadLogin") {
+			} else if (Response.Type === "BadLogin") {
 				Navigate("/login")
-			} else if (Message.Type == "Activated") {
-				setBalance(Message.Balance as number)
+			} else if (Response.Type === "Activated") {
+				setBalance(Response.Balance as number)
 				toast.success("Redeem successful")
-			} else if (Message.Type == "Rejected") {
-				const Reason = Message.Reason as string
+			} else if (Response.Type === "Rejected") {
+				const Reason = Response.Reason as string
 				toast.error(`Redeem rejected - ${Reason}`)
-			} else if (Message.Type == "Balance") {
-				setBalance(Message.Balance as number)
-			} else if (Message.Type == "Cost") {
-				setCosts(Previous => ({ ...Previous, [Message.Command]: Message.Cost }))
+			} else if (Response.Type === "Balance") {
+				setBalance(Response.Balance as number)
+			} else if (Response.Type === "Cost") {
+				setCosts(Previous => ({ ...Previous, [Response.Command]: Response.Cost }))
 			}
 		}
 		Connection.addEventListener("message", HandleMessage)

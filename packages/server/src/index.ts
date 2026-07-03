@@ -2,11 +2,15 @@ import http from "http"
 import express from "express"
 import { parseCookie } from "cookie"
 import { WebSocketServer, WebSocket } from "ws"
-import { OverlayBot } from "@overlaybot/shared"
 import { Pool } from "pg"
 import jwt from "jsonwebtoken"
 import "dotenv/config"
 
+import { Controls } from "@overlaybot/shared/src/UI"
+import { ServerRequest, ServerChallengeRequest } from "@overlaybot/shared/src/ServerRequests"
+import { BotResponseSchema } from "@overlaybot/shared/src/BotResponses"
+import { ServerBadLoginResponse, ServerBotDisconnectedResponse, ServerIntrospectionResponse } from "@overlaybot/shared/src/ServerResponses"
+import { ViewerRequestSchema } from "@overlaybot/shared/src/ViewerRequests"
 const DB_ConnectionPool = new Pool({
 	host: "localhost",
 	port: 5432,
@@ -163,7 +167,7 @@ class WS_ViewerConnection extends WS_Connection {
 }
 
 let CurrentBot: WS_BotConnection
-let CurrentControls: OverlayBot.Controls | null = null
+let CurrentControls: Controls | null = null
 const BotClients = new Map<WebSocket, WS_BotConnection>()
 const ViewerClients = new Map<WebSocket, WS_ViewerConnection>()
 const ViewerClientsByUser = new Map<string, Map<string, WS_ViewerConnection>>()
@@ -172,16 +176,22 @@ const ViewerClientsByID = new Map<string, WS_ViewerConnection>()
 async function HandleBotConnection(Client: WebSocket) {
 	console.log("Bot connected")
 	BotClients.set(Client, new WS_BotConnection(Client))
-	const ChallengeMessage = {
+	const ChallengeMessage: ServerChallengeRequest = {
 		Type: "Challenge",
 	}
 	Client.send(JSON.stringify(ChallengeMessage))
 
 	Client.on("message", (Data) => {
-		const Message = JSON.parse(Data.toString())
 		console.log("Received from bot:", Data.toString())
-		if (Message.Type === "Authorization") {
-			if (Message.Token === process.env.BOT_PASSWORD!) {
+		const Message = JSON.parse(Data.toString())
+		const Result = BotResponseSchema.safeParse(Message)
+		if (!Result.success) {
+			console.log(Result.error.issues)
+			return
+		}
+		const Response = Result.data
+		if (Response.Type === "Authorization") {
+			if (Response.Token === process.env.BOT_PASSWORD!) {
 				console.log("Bot authorized")
 				CurrentBot = BotClients.get(Client)!
 				BotClients.get(Client)!.Authorized = true
@@ -190,18 +200,19 @@ async function HandleBotConnection(Client: WebSocket) {
 				}
 				Client.send(JSON.stringify(Response))
 			}
-		} else if (Message.Type == "Introspection") {
-			CurrentControls = Message.Controls
+		} else if (Response.Type == "Introspection") {
+			CurrentControls = Response.Controls
 			ViewerClients.forEach((Connection) => {
-				const ControlsMessage = {
+				const ControlsResponse = {
 					Type: "Controls",
 					Controls: CurrentControls
 				}
-				Connection.Socket.send(JSON.stringify(ControlsMessage))
+				Connection.Socket.send(JSON.stringify(ControlsResponse))
 			})
-		} else if (Message.Type == "Rejected" || Message.Type == "Activated" || Message.Type == "Balance" || Message.Type == "Cost") {
-			const TargetConnection = ViewerClientsByID.get(Message.ConnectionID)!
-			TargetConnection.Socket.send(Data.toString())
+		} else if (Response.Type == "Rejected" || Response.Type == "Activated" || Response.Type == "Balance" || Response.Type == "Cost") {
+			const TargetConnection = ViewerClientsByID.get(Response.ConnectionID)!
+			const { ConnectionID, ...ServerResponse } = Response
+			TargetConnection.Socket.send(JSON.stringify(ServerResponse))
 		}
 	})
 	
@@ -210,7 +221,7 @@ async function HandleBotConnection(Client: WebSocket) {
 		CurrentControls = null
 		BotClients.delete(Client)
 		ViewerClients.forEach((Connection) => {
-			const BotDisconnectedMessage = {
+			const BotDisconnectedMessage: ServerBotDisconnectedResponse = {
 				Type: "BotDisconnected"
 			}
 			Connection.Socket.send(JSON.stringify(BotDisconnectedMessage))
@@ -249,21 +260,30 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 		
 		if (CurrentControls) {
 			console.log("Sending viewer current controls")
-			const ControlsMessage = {
-				Type: "Controls",
+			const IntrospectionMessage: ServerIntrospectionResponse = {
+				Type: "Introspection",
 				Controls: CurrentControls
 			}
-			Client.send(JSON.stringify(ControlsMessage))
+			Client.send(JSON.stringify(IntrospectionMessage))
 		}
 		
 		Client.on("message", (Data) => {
 			console.log("Received from viewer:", Data.toString())
 			const Message = JSON.parse(Data.toString())
-			if (Message.Type == "Activate" || Message.Type == "Balance" || Message.Type == "Cost") {
+			const Result = ViewerRequestSchema.safeParse(Message)
+			if (!Result.success) {
+				console.log(Result.error.issues)
+				return
+			}
+			const Response = Result.data
+			if (Response.Type == "Activate" || Response.Type == "Balance" || Response.Type == "Cost") {
 				const Viewer = ViewerClients.get(Client)!
-				Message.TwitchID = Viewer.TwitchID
-				Message.ConnectionID = Viewer.ConnectionID
-				CurrentBot.Socket.send(JSON.stringify(Message))
+				const ServerRequest = {
+					...Response,
+					TwitchID: Viewer.TwitchID,
+					ConnectionID: Viewer.ConnectionID,
+				} as ServerRequest
+				CurrentBot.Socket.send(JSON.stringify(ServerRequest))
 			}
 		})
 		
@@ -282,7 +302,7 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 		})
 	} catch(Error) {
 		console.log(Error)
-		let BadLoginMessage = {
+		let BadLoginMessage: ServerBadLoginResponse = {
 			Type: "BadLogin",
 			Error
 		}

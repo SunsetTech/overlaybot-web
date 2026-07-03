@@ -2,5 +2,8 @@
   "name": "@overlaybot/shared",
   "version": "1.0.0",
   "main": "./src/index.ts",
-  "types": "./src/index.ts"
+  "types": "./src/index.ts",
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
 }
