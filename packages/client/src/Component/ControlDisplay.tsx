@@ -3,7 +3,8 @@ import type { RefObject } from "react";
 import { UseViewerSocket } from "../AppContext";
 import type { OverlayBot } from "@overlaybot/shared";
 import { ParameterDisplay } from "./ParameterDisplay";
-import styles from "../Style/ControlDisplay.module.css";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 type ControlDisplayProps = {
 	name: string
@@ -33,18 +34,22 @@ export function ControlDisplay({name, control, requestCounter}: ControlDisplayPr
 	}
 	
 	
-	return (<div className={styles.card}>
-		<p>{name}</p>
-		{Object.entries(control.Parameters).map(([ParameterName, ParameterType]) => {
-			return (<ParameterDisplay 
-				key={ParameterName}
-				scope={name}
-				name={ParameterName} 
-				type={ParameterType}
-				value={Values[ParameterName]}
-				onChange={(Value: string | number) => HandleChange(ParameterName, Value)}
-			/>)
-		})}
-		<input type="button" value="Activate" onClick={HandleActivate}/>
-	</div>)
+	return (<Card className="min-w-[300px]">
+		<CardHeader style={{textAlign:"center"}}>
+			<CardTitle>{name}</CardTitle>
+		</CardHeader>
+		<CardContent>
+			{Object.entries(control.Parameters).map(([ParameterName, ParameterType]) => {
+				return (<ParameterDisplay 
+					key={ParameterName}
+					scope={name}
+					name={ParameterName} 
+					type={ParameterType}
+					value={Values[ParameterName]}
+					onChange={(Value: string | number) => HandleChange(ParameterName, Value)}
+				/>)
+			})}
+			<div style={{textAlign:"right"}}><Button onClick={HandleActivate}>Activate</Button></div>
+		</CardContent>
+	</Card>)
 }

@@ -1,4 +1,6 @@
 import type { OverlayBot } from "@overlaybot/shared";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input"; 
 
 type ParameterDisplayProps = {
 	name: string
@@ -11,14 +13,14 @@ type ParameterDisplayProps = {
 function CreateInput(Name: string, Type: OverlayBot.Type, Value: string | number, onChange: (Value: string | number) => void) {
 	switch(Type.Name) {
 		case "string": 
-			return (<input 
+			return (<Input 
 				id={Name}
 				type="text" 
 				value={Value as string}
 				onChange={(Element) => onChange(Element.target.value)}
 			/>)
 		case "integer": 
-			return (<input 
+			return (<Input 
 				id={Name}
 				type="number" 
 				min={Type.Parameters?.Minimum as number | undefined} 
@@ -30,8 +32,8 @@ function CreateInput(Name: string, Type: OverlayBot.Type, Value: string | number
 
 export function ParameterDisplay({name, scope, type, value, onChange}: ParameterDisplayProps) {
 	const FullName = `${scope}-${name}`
-	return (<div>
-		<label htmlFor={FullName}>{name}</label>
+	return (<Field>
+		<FieldLabel htmlFor={FullName}>{name}</FieldLabel>
 		{CreateInput(FullName, type, value, onChange)}
-	</div>)
+	</Field>)
 }

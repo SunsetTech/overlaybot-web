@@ -4,6 +4,8 @@ import { UseViewerSocket } from "./AppContext"
 import type { OverlayBot } from "@overlaybot/shared"
 import { ControlsDisplay } from "./Component/ControlsDisplay"
 import { toast, Toaster } from "react-hot-toast"
+import { Button } from "./components/ui/button"
+
 function App() {
 	const Connection = UseViewerSocket()
 	const [Controls, SetControls] = useState<OverlayBot.Controls | null>(null)
@@ -37,8 +39,12 @@ function App() {
 			? <ControlsDisplay controls={Controls} /> 
 			: <div>Bot offline!</div>
 		}
-		<p><a href="/logout">Logout</a></p>
-		<p><a href="/logout_everywhere">Logout everywhere</a></p>
+		<Button asChild>
+			<a href="/logout">Logout</a>
+		</Button>
+		<Button asChild>
+			<a href="/logout_everywhere">Logout Everywhere</a>
+		</Button>
 	</div>)
 }
 

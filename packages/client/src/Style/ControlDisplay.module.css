@@ -1,3 +1,14 @@
 .card {
 	border: 1px solid;
+	margin: 3px;
+	background-color: #aaaaff;
+	text-align: right;
+	padding: 2px;
+}
+
+.title {
+	text-align: center;
+	border-bottom: 1px solid;
+	margin-bottom: 2px;
+	background-color: #ddffdd
 }
