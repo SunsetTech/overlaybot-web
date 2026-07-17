@@ -7,7 +7,8 @@ function Login() {
 		"OAuthState", StateToken, {
 			path: "/",
 			sameSite: "lax",
-			maxAge: 300
+			maxAge: 300,
+			secure: true
 		}
 	)
 	const ClientID = import.meta.env.VITE_TWITCH_CLIENT_ID

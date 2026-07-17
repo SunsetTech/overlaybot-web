@@ -15,9 +15,13 @@ function App() {
 	const Navigate = useNavigate()
 
 	useEffect(() => {
-		if (!Connection) {return}
+		if (!Connection) {
+			console.log("??")
+			return
+		}
 		const HandleMessage = (Event: MessageEvent) => {
 			const Message = JSON.parse(Event.data)
+			console.log(Message)
 			const Result = ServerResponseSchema.safeParse(Message)
 			if (!Result.success) {
 				console.log(Result.error.issues)
@@ -35,6 +39,7 @@ function App() {
 				console.log("bot disconnected")
 				setControls(null)
 			} else if (Response.Type === "BadLogin") {
+				console.log("?")
 				Navigate("/login")
 			} else if (Response.Type === "Activated") {
 				setBalance(Response.Balance as number)

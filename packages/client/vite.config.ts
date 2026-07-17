@@ -12,7 +12,7 @@ export default defineConfig({
 		},
 	},
 	server: {
-		allowedHosts: ["overlaybot-web-client.tungstenbattlearmor.duckdns.org"],
+		allowedHosts: ["overlaybot-web-client.tungstenbattlearmor.duckdns.org", "overlaybot-web-client.storm.internal"],
 		proxy: {
 			"/auth": "http://localhost:3131",
 			"/viewer": {

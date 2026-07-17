@@ -12,7 +12,7 @@ import { BotResponseSchema } from "@overlaybot/shared/src/BotResponses"
 import { ServerBadLoginResponse, ServerBotDisconnectedResponse, ServerIntrospectionResponse } from "@overlaybot/shared/src/ServerResponses"
 import { ViewerRequestSchema } from "@overlaybot/shared/src/ViewerRequests"
 const DB_ConnectionPool = new Pool({
-	host: "localhost",
+	host: process.env.DB_HOST!,
 	port: 5432,
 	user: "overlaybot_web_server",
 	password: process.env.DB_PASSWORD!,
@@ -90,6 +90,7 @@ App.get("/auth", async (Request, Response) => {
 	const PassedState = Location.searchParams.get("state")
 	
 	if (!StoredState || !PassedState || PassedState != StoredState) {
+		console.log(!StoredState, !PassedState, PassedState != StoredState)
 		Response.writeHead(403)
 		Response.end("Possible CSRF detected")
 		return
@@ -115,6 +116,7 @@ App.get("/auth", async (Request, Response) => {
 		})
 	})
 	const TokenData = await TokenResponse.json()
+	console.log(TokenData)
 	const AccessToken = TokenData.access_token
 	
 	const UserResponse = await fetch("https://api.twitch.tv/helix/users", {
@@ -125,6 +127,7 @@ App.get("/auth", async (Request, Response) => {
 		}
 	})
 	const UserData = await UserResponse.json()
+	console.log(UserData)
 	const UserID = UserData.data[0].id as string
 	const TokenVersion = await GetTokenVersion(UserID)
 	const SessionToken = jwt.sign(
@@ -242,6 +245,7 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 		if (!SessionToken) {throw "no session token"}
 		const Payload = jwt.verify(SessionToken, process.env.JWT_SECRET!) as {ID: string; Version: number}
 		const StoredSessionVersion = await GetTokenVersion(Payload.ID)
+		console.log(await GetTokenVersion(Payload.ID))
 		if (StoredSessionVersion !== Payload.Version) {throw "version mismatch"}
 		let TwitchID = Payload.ID as string
 		console.log("TwitchID", TwitchID)
