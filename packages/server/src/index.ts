@@ -13,10 +13,10 @@ import { ServerBadLoginResponse, ServerBotDisconnectedResponse, ServerIntrospect
 import { ViewerRequestSchema } from "@overlaybot/shared/src/ViewerRequests"
 const DB_ConnectionPool = new Pool({
 	host: process.env.DB_HOST!,
-	port: 5432,
-	user: "overlaybot_web_server",
+	port: parseInt(process.env.DB_PORT!),
+	user: process.env.DB_USER!,
 	password: process.env.DB_PASSWORD!,
-	database: "OverlayBot_Web"
+	database: process.env.DB_NAME!
 })
 
 const TokenVersionCache = new Map<string, number>()
