@@ -7,7 +7,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 	const [ViewerSocket, SetViewerSocket] = useState<WebSocket | null>(null)
 	
 	useEffect(() => {
-		const Connection = new WebSocket("wss://overlaybot-web-client.storm.internal/viewer")
+		const Connection = new WebSocket(import.meta.env.VITE_VIEWER_WS_URI)
 		SetViewerSocket(Connection)
 		return () => Connection.close()
 	}, [])
