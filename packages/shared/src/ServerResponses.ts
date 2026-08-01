@@ -1,6 +1,12 @@
 import { z } from "zod"
 import { BotIntrospectionResponseSchema, BotBalanceResponseSchema, BotCostResponseSchema, BotActivatedResponseSchema, BotRejectedResponseSchema } from "./BotResponses"
 
+//Responses sent from server to bot
+export const ServerBotNotAuthorizedSchema = z.object({
+	Type: z.literal("NotAuthorized")
+})
+export type ServerBotNotAuthorizedResponse = z.infer<typeof ServerBotNotAuthorizedSchema>
+
 //Responses sent from server to client
 export const ServerBadLoginResponseSchema = z.object({
 	Type: z.literal("BadLogin"),
@@ -38,6 +44,7 @@ export type ServerRejectedResponse = z.infer<typeof ServerRejectedResponseSchema
 
 export const ServerResponseSchema = z.discriminatedUnion(
 	"Type",[
+		ServerBotNotAuthorizedSchema,
 		ServerBadLoginResponseSchema,
 		ServerBotDisconnectedResponseSchema,
 		ServerIntrospectionResponseSchema,
