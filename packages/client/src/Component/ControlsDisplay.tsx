@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { Controls } from "@overlaybot/shared/src/UI";
+import type { Controls } from "@overlaybot/shared";
 import { ControlDisplay } from "./ControlDisplay";
 import Style from "../Style/ControlsDisplay.module.css";
 

@@ -1,4 +1,4 @@
-import type { Type } from "@overlaybot/shared/src/UI";
+import type { Type } from "@overlaybot/shared";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input"; 
 

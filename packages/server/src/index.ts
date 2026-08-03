@@ -7,11 +7,11 @@ import jwt from "jsonwebtoken"
 import { timingSafeEqual } from "crypto"
 import "dotenv/config"
 
-import { Controls } from "@overlaybot/shared/src/UI"
-import { ServerRequest, ServerChallengeRequest } from "@overlaybot/shared/src/ServerRequests"
-import { BotResponseSchema } from "@overlaybot/shared/src/BotResponses"
-import { ServerBadLoginResponse, ServerBotDisconnectedResponse, ServerIntrospectionResponse, ServerBotNotAuthorizedResponse } from "@overlaybot/shared/src/ServerResponses"
-import { ViewerRequestSchema } from "@overlaybot/shared/src/ViewerRequests"
+import { Controls } from "@overlaybot/shared"
+import { ServerRequest, ServerChallengeRequest } from "@overlaybot/shared"
+import { BotResponseSchema } from "@overlaybot/shared"
+import { ServerBadLoginResponse, ServerBotDisconnectedResponse, ServerIntrospectionResponse, ServerBotNotAuthorizedResponse } from "@overlaybot/shared"
+import { ViewerRequestSchema } from "@overlaybot/shared"
 
 const DB_ConnectionPool = new Pool({
 	host: process.env.DB_HOST!,

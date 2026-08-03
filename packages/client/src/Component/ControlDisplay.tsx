@@ -1,7 +1,7 @@
 import { useState, useEffect} from "react";
 import type { RefObject } from "react";
 import { UseViewerSocket } from "../AppContext";
-import type { Control } from "@overlaybot/shared/src/UI";
+import type { Control } from "@overlaybot/shared";
 import { ParameterDisplay } from "./ParameterDisplay";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

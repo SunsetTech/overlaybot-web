@@ -14,7 +14,7 @@ function Login() {
 			maxAge: 300,
 			secure: true
 		})
-		const url = `https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=${ClientID}&redirect_uri=${RedirectURI}&scope=user%3Aread%3Aemail&state=${stateToken}`
+		const url = `https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=${ClientID}&redirect_uri=${encodeURIComponent(RedirectURI)}&scope=user%3Aread%3Aemail&state=${stateToken}`
 		window.location.href = url
 	}
 
