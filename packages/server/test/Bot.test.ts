@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { WebSocket } from "ws"
 import { AppState, WebSocketLike, WS_BotClient, WS_ViewerClient } from "../src/Types.js"
-import { ServerBotNotAuthorizedResponse, ServerIntrospectRequest, BotIntrospectionResponse, BotBalanceResponse, BotCostResponse, BotActivatedResponse, BotRejectedResponse } from "@overlaybot/shared"
+import { ServerBotNotAuthorizedResponse, ServerIntrospectRequest, BotIntrospectionResponse, BotBalanceResponse, BotCostResponse, BotActivatedResponse, BotRejectedResponse, Controls, ServerBotDisconnectedResponse } from "@overlaybot/shared"
 import * as Bot from "../src/Bot.js"
 
 // NOTE: Coax typescript into letting us get away with not implementing .on(), attempts to use will result in error
@@ -17,9 +17,8 @@ Terminated = false
 	}
 }
 
-function ExpectBotTerminatedSideEffects(Connection: MockWebSocket, BotClients: Map<WebSocketLike, WS_BotClient>) {
+function ExpectBotTerminatedSideEffects(Connection: MockWebSocket) {
 	expect(Connection.Terminated).toBe(true)
-	expect(BotClients.has(Connection)).toBe(false)
 }
 
 describe("ComparePasswords", () => {
@@ -33,17 +32,14 @@ describe("ComparePasswords", () => {
 
 describe("Disconnect", () => {
 	let TestSocket: MockWebSocket
-	let BotClients: Map<WebSocketLike, WS_BotClient>
 
 	beforeEach(() => {
 		TestSocket = new MockWebSocket()
-		BotClients = new Map()
-		BotClients.set(TestSocket, new WS_BotClient(TestSocket))
-		Bot.Disconnect(TestSocket, BotClients)
+		Bot.Disconnect(TestSocket)
 	})
 
 	it("terminates connection and clears mapping", () => {
-		ExpectBotTerminatedSideEffects(TestSocket, BotClients)
+		ExpectBotTerminatedSideEffects(TestSocket)
 	})
 })
 
@@ -81,7 +77,7 @@ describe("HandleAuthorization", () => {
 		})
 		
 		it("terminates old bot", () => {
-			ExpectBotTerminatedSideEffects(OldConnection, BotClients)
+			ExpectBotTerminatedSideEffects(OldConnection)
 		})
 		
 		it("sends introspection request", () => {
@@ -106,7 +102,7 @@ describe("HandleAuthorization", () => {
 		})
 		
 		it("terminates the connection", () => {
-			ExpectBotTerminatedSideEffects(Connection, BotClients)
+			ExpectBotTerminatedSideEffects(Connection)
 		})
 	})
 })
@@ -121,7 +117,7 @@ describe("HandleNotAuthorized", () => {
 		Client = new WS_BotClient(Connection)
 		BotClients = new Map()
 		BotClients.set(Connection, Client)
-		Bot.HandleNotAuthorized(Connection, BotClients)
+		Bot.HandleNotAuthorized(Connection)
 	})
 	
 	it("sends NotAuthorized response", () => {
@@ -134,9 +130,23 @@ describe("HandleNotAuthorized", () => {
 	})
 	
 	it("terminates connection", () => {
-		ExpectBotTerminatedSideEffects(Connection, BotClients)
+		ExpectBotTerminatedSideEffects(Connection)
 	})
 })
+
+const TestControls: Controls = {
+	TestControl: {
+		Parameters: {
+			TestParameter: {
+				Name: "string"
+			}
+		},
+		Defaults: {
+			TestParameter: "default"
+		},
+		Description: "Test control"
+	}
+}
 
 describe("HandleIntrospection", () => {
 	let BotConnection: MockWebSocket
@@ -144,19 +154,7 @@ describe("HandleIntrospection", () => {
 	let State: AppState
 	const Response: BotIntrospectionResponse = {
 		Type: "Introspection",
-		Controls: {
-			TestControl: {
-				Parameters: {
-					TestParameter: {
-						Name: "string"
-					}
-				},
-				Defaults: {
-					TestParameter: "default"
-				},
-				Description: "Test control"
-			}
-		}
+		Controls: TestControls
 	}
 	let Viewer1Connection: MockWebSocket
 	let Viewer1Client: WS_ViewerClient
@@ -249,4 +247,61 @@ describe("HandleMail", () => {
 			)
 		})
 	})
+})
+
+describe("HandleDisconnection", () => {
+	let CurrentBotConnection: MockWebSocket
+	let CurrentBotClient: WS_BotClient
+	let State: AppState
+	let UnauthedBotConnection: MockWebSocket
+	let UnauthedBotClient: WS_BotClient
+	let BotClients: Bot.BotClientsMap
+	let Viewer1Connection: MockWebSocket
+	let Viewer1Client: WS_ViewerClient
+	let Viewer2Connection: MockWebSocket
+	let Viewer2Client: WS_ViewerClient
+	let ViewerClients: Bot.ViewerClientsMap
+	
+	beforeEach(() => {
+		CurrentBotConnection = new MockWebSocket()
+		CurrentBotClient = new WS_BotClient(CurrentBotConnection)
+		State = new AppState(CurrentBotClient, TestControls)
+		UnauthedBotConnection = new MockWebSocket()
+		UnauthedBotClient = new WS_BotClient(UnauthedBotConnection)
+		BotClients = new Map()
+		BotClients.set(CurrentBotConnection, CurrentBotClient)
+		BotClients.set(UnauthedBotConnection, UnauthedBotClient)
+		Viewer1Connection = new MockWebSocket()
+		Viewer1Client = new WS_ViewerClient(Viewer1Connection, "1")
+		Viewer2Connection = new MockWebSocket()
+		Viewer2Client = new WS_ViewerClient(Viewer2Connection, "2")
+		ViewerClients = new Map()
+		ViewerClients.set(Viewer1Connection, Viewer1Client)
+		ViewerClients.set(Viewer2Connection, Viewer2Client)
+	})
+	
+	describe("current bot disconnects", () => {
+		beforeEach(() => {
+			Bot.HandleDisconnection(State, CurrentBotConnection, BotClients, ViewerClients)
+		})
+		it("removes bot client from connection map", () => {
+			expect(BotClients).not.toContainEqual(CurrentBotClient)
+		})
+		it("nullifies State.CurrentBot and State.CurrentControls", () => {
+			expect(State.CurrentBot).toBeNull()
+			expect(State.CurrentControls).toBeNull()
+		})
+		it("notifies connected viewers", () => {
+			const DisconnectMessage: ServerBotDisconnectedResponse = {
+				Type: "BotDisconnected"
+			}
+			expect(
+				Viewer1Connection.Sent.map(Content => JSON.parse(Content))
+			).toContainEqual(DisconnectMessage)
+			expect(
+				Viewer2Connection.Sent.map(Content => JSON.parse(Content))
+			).toContainEqual(DisconnectMessage)
+		})
+	})
+	// TODO: test unauthed bot disconnection
 })

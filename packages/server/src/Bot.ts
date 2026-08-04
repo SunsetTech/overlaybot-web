@@ -19,16 +19,15 @@ export function ComparePasswords(Provided: string, Against: string): boolean {
 	return IsEqualLength && IsEqual
 }
 
-export function Disconnect(Connection: WebSocketLike, BotClients: Map<WebSocketLike, WS_BotClient>) {
+export function Disconnect(Connection: WebSocketLike) {
 	Connection.terminate()
-	BotClients.delete(Connection)
 }
 
 export function HandleAuthorization(State: AppState, Connection: WebSocketLike, Response: BotAuthorizationResponse, DesiredPassword: string, BotClients: BotClientsMap) {
 	if (ComparePasswords(Response.Token, DesiredPassword)) {
 		console.log("Bot authorized")
 		if (State.CurrentBot) {
-			Disconnect(State.CurrentBot.Socket, BotClients)
+			Disconnect(State.CurrentBot.Socket)
 		}
 		State.CurrentBot = BotClients.get(Connection)!
 		const Response = {
@@ -36,16 +35,16 @@ export function HandleAuthorization(State: AppState, Connection: WebSocketLike, 
 		}
 		Connection.send(JSON.stringify(Response))
 	} else {
-		Disconnect(Connection, BotClients)
+		Disconnect(Connection)
 	}
 }
 
-export function HandleNotAuthorized(Connection: WebSocketLike, BotClients: BotClientsMap) {
+export function HandleNotAuthorized(Connection: WebSocketLike) {
 	const Response: ServerBotNotAuthorizedResponse = {
 		Type: "NotAuthorized"
 	}
 	Connection.send(JSON.stringify(Response))
-	Disconnect(Connection, BotClients)
+	Disconnect(Connection)
 }
 
 export function HandleIntrospection(State: AppState, Response: BotIntrospectionResponse, ViewerClients: ViewerClientsMap) {
@@ -86,21 +85,26 @@ export function HandleMessage(State: AppState, Connection: WebSocketLike, Data: 
 			HandleMail(Response, ViewerClientsByID)
 		}
 	} else {
-		HandleNotAuthorized(Connection, BotClients)
+		HandleNotAuthorized(Connection)
 	}
 }
 
 export function HandleDisconnection(State: AppState, Connection: WebSocketLike, BotClients: BotClientsMap, ViewerClients: ViewerClientsMap) {
-	console.log("Bot disconnected")
-	State.CurrentControls = null
-	State.CurrentBot = null
-	BotClients.delete(Connection)
-	ViewerClients.forEach((Client) => {
-		const BotDisconnectedMessage: ServerBotDisconnectedResponse = {
-			Type: "BotDisconnected"
-		}
-		Client.Socket.send(JSON.stringify(BotDisconnectedMessage))
-	})
+	const BotClient = BotClients.get(Connection)
+	if (BotClient) {
+		BotClients.delete(Connection)
+	}
+	if (BotClient != undefined && State.CurrentBot ===  BotClient) {
+		console.log("Current bot disconnected")
+		State.CurrentControls = null
+		State.CurrentBot = null
+		ViewerClients.forEach((Client) => {
+			const BotDisconnectedMessage: ServerBotDisconnectedResponse = {
+				Type: "BotDisconnected"
+			}
+			Client.Socket.send(JSON.stringify(BotDisconnectedMessage))
+		})
+	}
 }
 
 export async function HandleConnection(State: AppState, Connection: WebSocketLike, BotClients: BotClientsMap, ViewerClients: ViewerClientsMap, ViewerClientsByID: ViewerClientsByID_Map) {
