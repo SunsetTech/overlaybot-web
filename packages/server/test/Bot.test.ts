@@ -303,5 +303,20 @@ describe("HandleDisconnection", () => {
 			).toContainEqual(DisconnectMessage)
 		})
 	})
-	// TODO: test unauthed bot disconnection
+	describe("unauthed bot disconnects", () => {
+		beforeEach(() => {
+			Bot.HandleDisconnection(State, UnauthedBotConnection, BotClients, ViewerClients)
+		})
+		it("removes bot client from connection map", () => {
+			expect(BotClients).not.toContainEqual(UnauthedBotClient)
+		})
+		it("does not nullify State.CurrentBot or State.CurrentControls", () => {
+			expect(State.CurrentBot).toBe(CurrentBotClient)
+			expect(State.CurrentControls).toBe(TestControls)
+		})
+		it("does not notify viewers", () => {
+			expect(Viewer1Connection.Sent).toHaveLength(0)
+			expect(Viewer2Connection.Sent).toHaveLength(0)
+		})
+	})
 })
