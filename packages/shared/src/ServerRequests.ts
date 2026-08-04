@@ -1,4 +1,4 @@
-import type { ViewerBalanceRequest, ViewerCostRequest, ViewerActivateRequest } from "./ViewerRequests"
+import type { ViewerBalanceRequest, ViewerCostRequest, ViewerActivateRequest } from "./ViewerRequests.js"
 
 //Server Requests
 export interface ServerChallengeRequest {

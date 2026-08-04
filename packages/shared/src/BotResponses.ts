@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { ControlsSchema } from "./UI"
+import { ControlsSchema } from "./UI.js"
 
 //Responses received from OverlayBot
 export const BotAuthorizationResponseSchema = z.object({

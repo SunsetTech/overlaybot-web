@@ -4,16 +4,16 @@ import { parseCookie } from "cookie"
 import { WebSocketServer, WebSocket } from "ws"
 import { Pool } from "pg"
 import jwt from "jsonwebtoken"
-import { timingSafeEqual } from "crypto"
 import "dotenv/config"
 
 import { Controls } from "@overlaybot/shared"
-import { ServerRequest, ServerChallengeRequest } from "@overlaybot/shared"
-import { BotResponseSchema } from "@overlaybot/shared"
-import { ServerBadLoginResponse, ServerBotDisconnectedResponse, ServerIntrospectionResponse, ServerBotNotAuthorizedResponse } from "@overlaybot/shared"
+import { ServerRequest } from "@overlaybot/shared"
+import { ServerBadLoginResponse, ServerIntrospectionResponse } from "@overlaybot/shared"
 import { ViewerRequestSchema } from "@overlaybot/shared"
+import * as Bot from "./Bot"
+import { AppState } from "./Types"
 
-const DB_ConnectionPool = new Pool({
+const DB_ClientPool = new Pool({
 	host: process.env.DB_HOST!,
 	port: parseInt(process.env.DB_PORT!),
 	user: process.env.DB_USER!,
@@ -27,7 +27,7 @@ async function GetTokenVersion(TwitchID: string): Promise<number> {
 	if (TokenVersionCache.has(TwitchID)) {
 		return TokenVersionCache.get(TwitchID)!
 	} else {
-		const QueryResult = await DB_ConnectionPool.query(
+		const QueryResult = await DB_ClientPool.query(
 			`SELECT token_version FROM users WHERE twitch_id = $1`,
 			[TwitchID]
 		)
@@ -40,7 +40,7 @@ async function GetTokenVersion(TwitchID: string): Promise<number> {
 }
 
 async function IncrementTokenVersion(TwitchID: string) {
-	await DB_ConnectionPool.query(
+	await DB_ClientPool.query(
 		`INSERT INTO users (twitch_id, token_version) VALUES ($1, 1) ON CONFLICT (twitch_id) DO UPDATE SET token_version = users.token_version + 1`,
 		[TwitchID]
 	)
@@ -70,14 +70,14 @@ App.get("/logout_everywhere", async (Request, Response) => {
 		let TwitchID = Payload.ID as string
 
 		await IncrementTokenVersion(TwitchID)
-		ViewerClients.forEach((Connection) => {
-			if (Connection.TwitchID == TwitchID) {
+		ViewerConnections.forEach((Client) => {
+			if (Client.TwitchID == TwitchID) {
 				let BadLoginMessage: ServerBadLoginResponse = {
 					Type: "BadLogin",
 					Error: "Forcibly logged out"
 				}
-				Connection.Socket.send(JSON.stringify(BadLoginMessage))
-				Connection.Socket.terminate()
+				Client.Socket.send(JSON.stringify(BadLoginMessage))
+				Client.Socket.terminate()
 			}
 		})
 		Response.writeHead(302, {
@@ -93,6 +93,7 @@ App.get("/logout_everywhere", async (Request, Response) => {
 })
 
 App.get("/auth", async (Request, Response) => {
+	console.log("Auth endpoint hit")
 	try {
 		const Location = new URL(Request.url!, "http://localhost")
 		const Cookies = parseCookie(Request.headers.cookie ?? "")
@@ -132,7 +133,7 @@ App.get("/auth", async (Request, Response) => {
 			method: "GET",
 			headers: {
 				Authorization: "Bearer " + AccessToken,
-				"Client-ID": process.env.TWITCH_CLIENT_ID!,
+				"Connection-ID": process.env.TWITCH_CLIENT_ID!,
 			}
 		})
 		const UserData = await UserResponse.json()
@@ -167,15 +168,14 @@ const HTTP_Server = http.createServer(App)
 
 const WS_Server = new WebSocketServer({ server: HTTP_Server })
 
-class WS_Connection {
+class WS_Client {
 	IsAlive = true
 	constructor(public Socket: WebSocket) {}
 }
 
-class WS_BotConnection extends WS_Connection {
-}
+class WS_BotClient extends WS_Client {}
 
-class WS_ViewerConnection extends WS_Connection {
+class WS_ViewerClient extends WS_Client {
 	public ConnectionID: string
 	constructor(Socket: WebSocket, public TwitchID: string) {
 		super(Socket)
@@ -183,96 +183,15 @@ class WS_ViewerConnection extends WS_Connection {
 	}
 }
 
-let CurrentBot: WS_BotConnection | null = null
+const BotConnections = new Map<WebSocket, WS_BotClient>()
+let CurrentBot: WS_BotClient | null = null
 let CurrentControls: Controls | null = null
-const BotClients = new Map<WebSocket, WS_BotConnection>()
-const ViewerClients = new Map<WebSocket, WS_ViewerConnection>()
-const ViewerClientsByUser = new Map<string, Map<string, WS_ViewerConnection>>()
-const ViewerClientsByID = new Map<string, WS_ViewerConnection>()
+const ViewerConnections = new Map<WebSocket, WS_ViewerClient>()
+const ViewerConnectionsByUser = new Map<string, Map<string, WS_ViewerClient>>()
+const ViewerConnectionsByID = new Map<string, WS_ViewerClient>()
+const State = new AppState(CurrentBot, CurrentControls)
 
-function ComparePasswords(Provided: string, Against: string): boolean {
-	const ProvidedBuffer = Buffer.from(Provided, "utf8")
-	const AgainstBuffer = Buffer.from(Against, "utf8")
-	const IsEqualLength = ProvidedBuffer.length === AgainstBuffer.length
-	const CompareBuffer = IsEqualLength ? ProvidedBuffer : AgainstBuffer
-	const IsEqual = timingSafeEqual(CompareBuffer, AgainstBuffer)
-	return IsEqualLength && IsEqual
-}
-
-async function HandleBotConnection(Client: WebSocket) {
-	console.log("Bot connected")
-	BotClients.set(Client, new WS_BotConnection(Client))
-	const ChallengeMessage: ServerChallengeRequest = {
-		Type: "Challenge",
-	}
-	Client.send(JSON.stringify(ChallengeMessage))
-
-	Client.on("message", (Data) => {
-		let Message
-		try {
-			Message = JSON.parse(Data.toString())
-		} catch (Exception) {
-			console.log("Malformed message received from bot")
-			return
-		}
-		const Result = BotResponseSchema.safeParse(Message)
-		if (!Result.success) {
-			console.log("Malformed message received from bot")
-			return
-		}
-		const Response = Result.data
-		if (Response.Type === "Authorization") {
-			if (ComparePasswords(Response.Token, process.env.BOT_PASSWORD!)) {
-				console.log("Bot authorized")
-				CurrentBot = BotClients.get(Client)!
-				const Response = {
-					Type: "Introspect",
-				}
-				Client.send(JSON.stringify(Response))
-			}
-		} else if (BotClients.get(Client) === CurrentBot) {
-			if (Response.Type == "Introspection") {
-				CurrentControls = Response.Controls
-				ViewerClients.forEach((Connection) => {
-					const ControlsResponse = {
-						Type: "Introspection",
-						Controls: CurrentControls
-					}
-					Connection.Socket.send(JSON.stringify(ControlsResponse))
-				})
-			} else if (Response.Type == "Rejected" || Response.Type == "Activated" || Response.Type == "Balance" || Response.Type == "Cost") {
-				const TargetConnection = ViewerClientsByID.get(Response.ConnectionID)!
-				const { ConnectionID, ...ServerResponse } = Response
-				TargetConnection.Socket.send(JSON.stringify(ServerResponse))
-			} 
-		} else {
-			const Response: ServerBotNotAuthorizedResponse = {
-				Type: "NotAuthorized"
-			}
-			Client.send(JSON.stringify(Response))
-			Client.terminate()
-		}
-	})
-	
-	Client.on("close", () => {
-		console.log("Bot disconnected")
-		CurrentControls = null
-		CurrentBot = null
-		BotClients.delete(Client)
-		ViewerClients.forEach((Connection) => {
-			const BotDisconnectedMessage: ServerBotDisconnectedResponse = {
-				Type: "BotDisconnected"
-			}
-			Connection.Socket.send(JSON.stringify(BotDisconnectedMessage))
-		})
-	})
-	
-	Client.on("pong", () => {
-		BotClients.get(Client)!.IsAlive = true;
-	})
-}
-
-async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingMessage) {
+async function HandleViewerConnection(Connection: WebSocket, Request: http.IncomingMessage) {
 	console.log("Viewer connected")
 	try {
 		const Cookies = Request.headers.cookie
@@ -283,28 +202,28 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 		const StoredSessionVersion = await GetTokenVersion(Payload.ID)
 		if (StoredSessionVersion !== Payload.Version) {throw "version mismatch"}
 		let TwitchID = Payload.ID as string
-		if (ViewerClientsByUser.has(TwitchID)) {
-			const ActiveClients = ViewerClientsByUser.get(TwitchID)!
-			if (ActiveClients.size >= 5) {throw "too many connections"}
+		if (ViewerConnectionsByUser.has(TwitchID)) {
+			const ActiveConnections = ViewerConnectionsByUser.get(TwitchID)!
+			if (ActiveConnections.size >= 5) {throw "too many connections"}
 		}
 
-		const Viewer = new WS_ViewerConnection(Client, TwitchID)
-		ViewerClients.set(Client, Viewer)
-		if (!ViewerClientsByUser.has(TwitchID)) {
-			ViewerClientsByUser.set(TwitchID, new Map())
+		const Viewer = new WS_ViewerClient(Connection, TwitchID)
+		ViewerConnections.set(Connection, Viewer)
+		if (!ViewerConnectionsByUser.has(TwitchID)) {
+			ViewerConnectionsByUser.set(TwitchID, new Map())
 		}
-		ViewerClientsByUser.get(TwitchID)!.set(Viewer.ConnectionID, Viewer)
-		ViewerClientsByID.set(Viewer.ConnectionID, Viewer)
+		ViewerConnectionsByUser.get(TwitchID)!.set(Viewer.ConnectionID, Viewer)
+		ViewerConnectionsByID.set(Viewer.ConnectionID, Viewer)
 		
-		if (CurrentControls) {
+		if (State.CurrentControls) {
 			const IntrospectionMessage: ServerIntrospectionResponse = {
 				Type: "Introspection",
-				Controls: CurrentControls
+				Controls: State.CurrentControls
 			}
-			Client.send(JSON.stringify(IntrospectionMessage))
+			Connection.send(JSON.stringify(IntrospectionMessage))
 		}
 		
-		Client.on("message", (Data) => {
+		Connection.on("message", (Data) => {
 			let Message
 			try {
 				Message = JSON.parse(Data.toString())
@@ -318,29 +237,29 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 				return
 			}
 			const Response = Result.data
-			if ((Response.Type == "Activate" || Response.Type == "Balance" || Response.Type == "Cost") && CurrentBot !== null) {
-				const Viewer = ViewerClients.get(Client)!
+			if ((Response.Type == "Activate" || Response.Type == "Balance" || Response.Type == "Cost") && State.CurrentBot !== null) {
+				const Viewer = ViewerConnections.get(Connection)!
 				const ServerRequest = {
 					...Response,
 					TwitchID: Viewer.TwitchID,
 					ConnectionID: Viewer.ConnectionID,
 				} as ServerRequest
-				CurrentBot.Socket.send(JSON.stringify(ServerRequest))
+				State.CurrentBot.Socket.send(JSON.stringify(ServerRequest))
 			}
 		})
 		
-		Client.on("close", () => {
+		Connection.on("close", () => {
 			console.log("Viewer disconnected")
-			ViewerClients.delete(Client)
-			ViewerClientsByID.delete(Viewer.ConnectionID)
-			ViewerClientsByUser.get(Viewer.TwitchID)!.delete(Viewer.ConnectionID)
-			if (ViewerClientsByUser.get(Viewer.TwitchID)!.size == 0) {
-				ViewerClientsByUser.delete(Viewer.TwitchID)
+			ViewerConnections.delete(Connection)
+			ViewerConnectionsByID.delete(Viewer.ConnectionID)
+			ViewerConnectionsByUser.get(Viewer.TwitchID)!.delete(Viewer.ConnectionID)
+			if (ViewerConnectionsByUser.get(Viewer.TwitchID)!.size == 0) {
+				ViewerConnectionsByUser.delete(Viewer.TwitchID)
 			}
 		})
 		
-		Client.on("pong", () => {
-			ViewerClients.get(Client)!.IsAlive = true;
+		Connection.on("pong", () => {
+			ViewerConnections.get(Connection)!.IsAlive = true;
 		})
 	} catch(Error) {
 		console.log(Error)
@@ -348,25 +267,25 @@ async function HandleViewerConnection(Client: WebSocket, Request: http.IncomingM
 			Type: "BadLogin",
 			Error: "Login failed"
 		}
-		Client.send(JSON.stringify(BadLoginMessage))
-		Client.terminate()
+		Connection.send(JSON.stringify(BadLoginMessage))
+		Connection.terminate()
 	}
 }
 
-WS_Server.on("connection", async (Client, Request) => {
+WS_Server.on("connection", async (Connection, Request) => {
 	const Path = new URL(Request.url!, "http://localhost").pathname
 	if (Path === "/bot") {
-		await HandleBotConnection(Client)
+		await Bot.HandleConnection(State, Connection, BotConnections, ViewerConnections, ViewerConnectionsByID)
 	} else if (Path === "/viewer") {
 		const Origin = Request.headers.origin
 		if (Origin === undefined || Origin !== process.env.ALLOWED_ORIGIN) {
 			console.log(`origin '${Origin}' not allowed, expected '${process.env.ALLOWED_ORIGIN}'`)
-			Client.terminate()
+			Connection.terminate()
 		} else {
-			await HandleViewerConnection(Client, Request)
+			await HandleViewerConnection(Connection, Request)
 		}
 	} else {
-		Client.terminate()
+		Connection.terminate()
 	}
 })
 
@@ -374,16 +293,16 @@ HTTP_Server.listen(3131, '0.0.0.0', () => {
 	console.log("listening on port 3131")
 })
 
-function CheckLiveness(Client: WS_Connection) {
-	if (Client.IsAlive === false) {
-		Client.Socket.terminate()
+function CheckLiveness(Connection: WS_Client) {
+	if (Connection.IsAlive === false) {
+		Connection.Socket.terminate()
 		return
 	}
-	Client.IsAlive = false
-	Client.Socket.ping()
+	Connection.IsAlive = false
+	Connection.Socket.ping()
 }
 
 setInterval(() => {
-	BotClients.forEach(CheckLiveness)
-	ViewerClients.forEach(CheckLiveness)
+	BotConnections.forEach(CheckLiveness)
+	ViewerConnections.forEach(CheckLiveness)
 }, 30000)

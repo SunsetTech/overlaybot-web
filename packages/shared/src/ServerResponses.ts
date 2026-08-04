@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { BotIntrospectionResponseSchema, BotBalanceResponseSchema, BotCostResponseSchema, BotActivatedResponseSchema, BotRejectedResponseSchema } from "./BotResponses"
+import { BotIntrospectionResponseSchema, BotBalanceResponseSchema, BotCostResponseSchema, BotActivatedResponseSchema, BotRejectedResponseSchema } from "./BotResponses.js"
 
 //Responses sent from server to bot
 export const ServerBotNotAuthorizedSchema = z.object({

@@ -11,5 +11,8 @@
 		"build": "npm run build -w @overlaybot/shared && npm run build -w @overlaybot/server",
 		"build:shared": "npm run build -w @overlaybot/shared",
 		"build:server": "npm run build -w @overlaybot/server"
+	},
+	"devDependencies": {
+		"vitest": "^4.1.10"
 	}
 }
