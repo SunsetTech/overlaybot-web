@@ -109,6 +109,7 @@ App.get("/auth", async (Request, Response) => {
 			}
 		})
 		const UserData = await UserResponse.json()
+		console.log(UserData)
 		const UserID = UserData.data[0].id as string
 		const TokenVersion = await Database.GetTokenVersion(DB_ClientPool, UserID)
 		const SessionToken = jwt.sign(
@@ -129,9 +130,9 @@ App.get("/auth", async (Request, Response) => {
 		Response.end()
 	} catch (Error) {
 		console.log(Error)
-		Response.writeHead(302, {
+		/*Response.writeHead(302, {
 			location: `/login`,
-		})
+		})*/
 		Response.end()
 	}
 })
