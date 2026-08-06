@@ -105,7 +105,7 @@ App.get("/auth", async (Request, Response) => {
 			method: "GET",
 			headers: {
 				Authorization: "Bearer " + AccessToken,
-				"Connection-ID": process.env.TWITCH_CLIENT_ID!,
+				"Client-Id": process.env.TWITCH_CLIENT_ID!,
 			}
 		})
 		const UserData = await UserResponse.json()
@@ -130,9 +130,9 @@ App.get("/auth", async (Request, Response) => {
 		Response.end()
 	} catch (Error) {
 		console.log(Error)
-		/*Response.writeHead(302, {
+		Response.writeHead(302, {
 			location: `/login`,
-		})*/
+		})
 		Response.end()
 	}
 })
