@@ -1,6 +1,5 @@
 import { createContext, useState, useEffect, useContext } from "react"
 import type { ReactNode } from "react"
-
 const AppContext = createContext<WebSocket | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -8,6 +7,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 	
 	useEffect(() => {
 		const Connection = new WebSocket(import.meta.env.VITE_VIEWER_WS_URI)
+		console.assert(Connection !== null)
+		console.log(Connection)
 		SetViewerSocket(Connection)
 		return () => Connection.close()
 	}, [])

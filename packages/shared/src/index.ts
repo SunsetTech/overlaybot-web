@@ -1,5 +1,2 @@
-export * from "./BotResponses.js"
-export * from "./ServerRequests.js"
-export * from "./ServerResponses.js"
-export * from "./UI.js"
-export * from "./ViewerRequests.js"
+export * as Message from "./Message/index.js"
+export * as UI from "./UI.js"

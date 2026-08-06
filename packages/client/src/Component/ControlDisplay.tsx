@@ -1,23 +1,21 @@
 import { useState, useEffect} from "react";
-import type { RefObject } from "react";
 import { UseViewerSocket } from "../AppContext";
-import type { Control } from "@overlaybot/shared";
+import * as Shared from "@overlaybot/shared";
 import { ParameterDisplay } from "./ParameterDisplay";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 type ControlDisplayProps = {
 	name: string
-	control: Control
-	requestCounter: RefObject<number>
+	control: Shared.UI.Control
 	cost: number
 }
 
-export function ControlDisplay({name, control, requestCounter, cost}: ControlDisplayProps) {
+export function ControlDisplay({name, control, cost}: ControlDisplayProps) {
 	const Connection = UseViewerSocket()
 	const [Values, setValues] = useState<Record<string, string | number>>(control.Defaults)
 	useEffect(() => {
-		const CostRequest = {
+		const CostRequest: Shared.Message.ViewerToBot.Cost = {
 			Type: "Cost",
 			Command: name,
 			Parameters: Values
@@ -27,7 +25,7 @@ export function ControlDisplay({name, control, requestCounter, cost}: ControlDis
 	const HandleChange = (ParameterName: string, Value: string | number) => {
 		const NewValues = { ...Values, [ParameterName]: Value }
 		setValues(NewValues)
-		const CostRequest = {
+		const CostRequest: Shared.Message.ViewerToBot.Cost = {
 			Type: "Cost",
 			Command: name,
 			Parameters: NewValues
@@ -36,11 +34,10 @@ export function ControlDisplay({name, control, requestCounter, cost}: ControlDis
 	}
 	
 	const HandleActivate = () => {
-		const ActivateMessage = {
+		const ActivateMessage: Shared.Message.ViewerToBot.Activate = {
 			Type: "Activate",
 			Command: name,
-			Parameters: Values,
-			RequestID: ++requestCounter.current
+			Parameters: Values
 		}
 		Connection!.send(JSON.stringify(ActivateMessage))
 	}

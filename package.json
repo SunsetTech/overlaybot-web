@@ -8,11 +8,13 @@
 		"esbuild@0.28.1": true
 	},
 	"scripts": {
-		"build": "npm run build -w @overlaybot/shared && npm run build -w @overlaybot/server",
+		"build": "npm run build -w @overlaybot/shared && npm run build -w @overlaybot/server && npm run build -w @overlaybot/client",
 		"build:shared": "npm run build -w @overlaybot/shared",
-		"build:server": "npm run build -w @overlaybot/server"
+		"build:server": "npm run build -w @overlaybot/server",
+		"build:client": "npm run build -w @overlaybot/client"
 	},
 	"devDependencies": {
+		"supertest": "^7.2.2",
 		"vitest": "^4.1.10"
 	}
 }

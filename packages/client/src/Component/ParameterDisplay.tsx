@@ -1,16 +1,16 @@
-import type { Type } from "@overlaybot/shared";
+import * as Shared from "@overlaybot/shared";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input"; 
 
 type ParameterDisplayProps = {
 	name: string
 	scope: string
-	type: Type
+	type: Shared.UI.Type
 	value: string | number
 	onChange: (Value: string | number) => void
 }
 
-function CreateInput(Name: string, Type: Type, Value: string | number, onChange: (Value: string | number) => void) {
+function CreateInput(Name: string, Type: Shared.UI.Type, Value: string | number, onChange: (Value: string | number) => void) {
 	switch(Type.Name) {
 		case "string": 
 			return (<Input 

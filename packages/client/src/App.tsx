@@ -4,25 +4,26 @@ import { UseViewerSocket } from "./AppContext"
 import { ControlsDisplay } from "./Component/ControlsDisplay"
 import { toast, Toaster } from "react-hot-toast"
 import { Button } from "./components/ui/button"
-import type { Controls } from "@overlaybot/shared"
-import { ServerResponseSchema } from "@overlaybot/shared"
+import * as Shared from "@overlaybot/shared"
 
 function App() {
 	const Connection = UseViewerSocket()
-	const [Controls, setControls] = useState<Controls | null>(null)
+	const [Controls, setControls] = useState<Shared.UI.Controls | null>(null)
 	const [Balance, setBalance] = useState<number>(0)
 	const [Costs, setCosts] = useState<Record<string, number>>({})
 	const Navigate = useNavigate()
-
+	useEffect(() => {
+		console.log("Connection changed:", Connection)
+	}, [Connection])
 	useEffect(() => {
 		if (!Connection) {
-			console.log("??")
 			return
 		}
 		const HandleMessage = (Event: MessageEvent) => {
+			console.log(Event)
 			const Message = JSON.parse(Event.data)
 			console.log(Message)
-			const Result = ServerResponseSchema.safeParse(Message)
+			const Result = Shared.Message.ServerToViewer.RootSchema.safeParse(Message)
 			if (!Result.success) {
 				console.log(Result.error.issues)
 				return
@@ -31,15 +32,13 @@ function App() {
 			if (Response.Type === "Introspection") {
 				console.log("updating controls")
 				setControls(Response.Controls)
-				const BalanceRequest = {
+				const BalanceRequest: Shared.Message.ViewerToBot.Balance = {
 					Type: "Balance"
 				}
 				Connection.send(JSON.stringify(BalanceRequest))
 			} else if (Response.Type === "BotDisconnected") {
-				console.log("bot disconnected")
 				setControls(null)
 			} else if (Response.Type === "BadLogin") {
-				console.log("?")
 				Navigate("/login")
 			} else if (Response.Type === "Activated") {
 				setBalance(Response.Balance as number)

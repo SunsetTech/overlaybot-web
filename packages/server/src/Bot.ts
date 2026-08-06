@@ -1,14 +1,8 @@
 import { RawData } from "ws"
 import { timingSafeEqual } from "crypto"
 import "dotenv/config"
-import { WebSocketLike, WS_BotClient, WS_ViewerClient, AppState } from "./Types"
-import { ServerChallengeRequest } from "@overlaybot/shared"
-import { BotResponseSchema, BotAuthorizationResponse } from "@overlaybot/shared"
-import { ServerBotDisconnectedResponse, ServerBotNotAuthorizedResponse, BotResponse, BotIntrospectionResponse } from "@overlaybot/shared"
-
-export type BotClientsMap = Map<WebSocketLike, WS_BotClient>
-export type ViewerClientsMap = Map<WebSocketLike, WS_ViewerClient>
-export type ViewerClientsByID_Map = Map<string, WS_ViewerClient>
+import * as Shared from "@overlaybot/shared"
+import * as Types from "./Types"
 
 export function ComparePasswords(Provided: string, Against: string): boolean {
 	const ProvidedBuffer = Buffer.from(Provided, "utf8")
@@ -19,104 +13,119 @@ export function ComparePasswords(Provided: string, Against: string): boolean {
 	return IsEqualLength && IsEqual
 }
 
-export function Disconnect(Connection: WebSocketLike) {
-	Connection.terminate()
+export function Disconnect(Client: Types.WS_BotClient) {
+	Client.Socket.terminate()
 }
 
-export function HandleAuthorization(State: AppState, Connection: WebSocketLike, Response: BotAuthorizationResponse, DesiredPassword: string, BotClients: BotClientsMap) {
-	if (ComparePasswords(Response.Token, DesiredPassword)) {
-		console.log("Bot authorized")
+export function SendToBot(Client: Types.WS_BotClient, Message: Shared.Message.ServerToBot.Root) {
+	Client.Socket.send(JSON.stringify(Message))
+}
+
+export function HandleAuthorization(State: Types.AppState, Client: Types.WS_BotClient, Message: Shared.Message.BotToServer.Authorization, DesiredPassword: string) {
+	if (ComparePasswords(Message.Token, DesiredPassword)) {
 		if (State.CurrentBot) {
-			Disconnect(State.CurrentBot.Socket)
+			console.log("Disconnecting old bot")
+			Disconnect(State.CurrentBot)
 		}
-		State.CurrentBot = BotClients.get(Connection)!
-		const Response = {
-			Type: "Introspect",
-		}
-		Connection.send(JSON.stringify(Response))
+		State.CurrentBot = Client
+		SendToBot(State.CurrentBot, {
+			Type: "Introspect"
+		})
+		
 	} else {
-		Disconnect(Connection)
+		Disconnect(Client)
 	}
 }
 
-export function HandleNotAuthorized(Connection: WebSocketLike) {
-	const Response: ServerBotNotAuthorizedResponse = {
+export function HandleNotAuthorized(Client: Types.WS_BotClient) {
+	SendToBot(Client, {
 		Type: "NotAuthorized"
-	}
-	Connection.send(JSON.stringify(Response))
-	Disconnect(Connection)
+	})
+	Disconnect(Client)
 }
 
-export function HandleIntrospection(State: AppState, Response: BotIntrospectionResponse, ViewerClients: ViewerClientsMap) {
-	State.CurrentControls = Response.Controls
+export function SendToViewer(Client: Types.WS_ViewerClient, Message: Shared.Message.ServerToViewer.Root) {
+	Client.Socket.send(JSON.stringify(Message))
+}
+
+export function ForwardToViewer(Client: Types.WS_ViewerClient, Message: Shared.Message.BotToServer.MailToViewer) {
+	SendToViewer(Client, Message.Enclosed)
+}
+
+export function HandleIntrospection(State: Types.AppState, Message: Shared.Message.BotToServer.Introspection, ViewerClients: Types.ViewerClientsMap) {
+	State.CurrentControls = Message.Controls
 	ViewerClients.forEach((Client) => {
-		Client.Socket.send(JSON.stringify(Response))
+		SendToViewer(Client, Message)
 	})
 }
 
-export function HandleMail(Response: BotResponse, ViewerClientsByID: ViewerClientsByID_Map) {
-	if (Response.Type == "Rejected" || Response.Type == "Activated" || Response.Type == "Balance" || Response.Type == "Cost") {
-		const { ConnectionID, ...ServerResponse } = Response
-		const TargetClient = ViewerClientsByID.get(ConnectionID)!
-		TargetClient.Socket.send(JSON.stringify(ServerResponse))
+export function HandleMail(Message: Shared.Message.BotToServer.MailToViewer, ViewerClientsByID: Types.ViewerClientsByID_Map) {
+	const TargetClient = ViewerClientsByID.get(Message.ConnectionID)
+	if (TargetClient) {
+		ForwardToViewer(TargetClient, Message)
 	}
 }
 
-export function HandleMessage(State: AppState, Connection: WebSocketLike, Data: RawData, BotClients: BotClientsMap, ViewerClients: ViewerClientsMap, ViewerClientsByID: ViewerClientsByID_Map) {
+export function HandleMessage(State: Types.AppState, Client: Types.WS_BotClient, Data: RawData, DesiredPassword: string, ViewerClients: Types.ViewerClientsMap, ViewerClientsByID: Types.ViewerClientsByID_Map) {
 	let Message
 	try {
 		Message = JSON.parse(Data.toString())
 	} catch (Exception) {
-		console.log("Malformed message received from bot")
+		console.error("Malformed message received from bot", Exception)
 		return
 	}
-	const Result = BotResponseSchema.safeParse(Message)
+	const Result = Shared.Message.BotToServer.RootSchema.safeParse(Message)
 	if (!Result.success) {
-		console.log("Malformed message received from bot", Message)
+		console.error("Malformed message received from bot", Result)
 		return
 	}
-	const Response = Result.data
-	if (Response.Type === "Authorization") {
-		HandleAuthorization(State, Connection, Response, process.env.BOT_PASSWORD!, BotClients)
-	} else if (BotClients.get(Connection) === State.CurrentBot) {
-		if (Response.Type === "Introspection") {
-			HandleIntrospection(State, Response, ViewerClients)
-		} else {
-			HandleMail(Response, ViewerClientsByID)
+	Message = Result.data
+	if (Message.Type === "Authorization") {
+		HandleAuthorization(State, Client, Message, DesiredPassword)
+	} else if (Client === State.CurrentBot) {
+		if (Message.Type === "Introspection") {
+			HandleIntrospection(State, Message, ViewerClients)
+		} else if (Message.Type === "MailToViewer") {
+			HandleMail(Message, ViewerClientsByID)
 		}
 	} else {
-		HandleNotAuthorized(Connection)
+		HandleNotAuthorized(Client)
 	}
 }
 
-export function HandleDisconnection(State: AppState, Connection: WebSocketLike, BotClients: BotClientsMap, ViewerClients: ViewerClientsMap) {
+export function HandleDisconnection(State: Types.AppState, Connection: Types.WebSocketLike, BotClients: Types.BotClientsMap, ViewerClients: Types.ViewerClientsMap) {
+	console.log("Bot disconnected")
 	const BotClient = BotClients.get(Connection)
 	if (BotClient) {
 		BotClients.delete(Connection)
 	}
 	if (BotClient != undefined && State.CurrentBot ===  BotClient) {
-		console.log("Current bot disconnected")
 		State.CurrentControls = null
 		State.CurrentBot = null
 		ViewerClients.forEach((Client) => {
-			const BotDisconnectedMessage: ServerBotDisconnectedResponse = {
+			SendToViewer(Client, {
 				Type: "BotDisconnected"
-			}
-			Client.Socket.send(JSON.stringify(BotDisconnectedMessage))
+			})
 		})
 	}
 }
 
-export async function HandleConnection(State: AppState, Connection: WebSocketLike, BotClients: BotClientsMap, ViewerClients: ViewerClientsMap, ViewerClientsByID: ViewerClientsByID_Map) {
-	console.log("Bot connected")
-	BotClients.set(Connection, new WS_BotClient(Connection))
-	const ChallengeMessage: ServerChallengeRequest = {
-		Type: "Challenge",
-	}
-	Connection.send(JSON.stringify(ChallengeMessage))
+export function RegisterConnection(Connection: Types.WebSocketLike, BotClients: Types.BotClientsMap) {
+	const Client = new Types.WS_BotClient(Connection)
+	BotClients.set(Connection, Client)
+	SendToBot(Client, {
+		Type: "Challenge"
+	})
+	return Client
+}
 
+export async function HandleConnection(State: Types.AppState, Connection: Types.WebSocketLike, BotClients: Types.BotClientsMap, ViewerClients: Types.ViewerClientsMap, ViewerClientsByID: Types.ViewerClientsByID_Map) {
+	console.debug("Bot connected")
+	
+	const Client = RegisterConnection(Connection, BotClients)
+	
 	Connection.on("message", (Data) => {
-		HandleMessage(State, Connection, Data, BotClients, ViewerClients, ViewerClientsByID)
+		HandleMessage(State, Client, Data, process.env.BOT_PASSWORD!, ViewerClients, ViewerClientsByID)
 	})
 	
 	Connection.on("close", () => {
